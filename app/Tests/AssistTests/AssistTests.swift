@@ -93,3 +93,16 @@ final class PathTests: XCTestCase {
         XCTAssertEqual(Conduit.requestPath("events", query: ["scope_id": "assist", "after_sequence": "5"]), "/v1/events?after_sequence=5&scope_id=assist")
     }
 }
+
+final class CandidateChangeTests: XCTestCase {
+    private func change(_ json: String) throws -> CandidateChange {
+        try JSONDecoder().decode(CandidateChange.self, from: Data(json.utf8))
+    }
+
+    func testAnAddOntoAValueOverwritesIt() throws {
+        XCTAssertTrue(try change(#"{"id":"c1","op":"add","pointer":"/settings/x","state":"proposed","why":"w","before":1,"after":2}"#).overwrites)
+        XCTAssertFalse(try change(#"{"id":"c1","op":"add","pointer":"/settings/x","state":"proposed","why":"w","after":2}"#).overwrites)
+        XCTAssertFalse(try change(#"{"id":"c1","op":"add","pointer":"/settings/x","state":"proposed","why":"w","before":null,"after":2}"#).overwrites)
+        XCTAssertFalse(try change(#"{"id":"c1","op":"replace","pointer":"/settings/x","state":"proposed","why":"w","before":1,"after":2}"#).overwrites)
+    }
+}

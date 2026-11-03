@@ -40,6 +40,8 @@ const (
 )
 
 // Change ops, as `config set` (add, replace) and `config unset` (remove).
+// `config set` sets an array element in place, so an add onto an existing
+// element would replace it; propose refuses one (see overwritesElement).
 const (
 	OpAdd     = "add"
 	OpReplace = "replace"
@@ -237,6 +239,10 @@ func candidate(ctx context.Context, host inproc.ConfigHost, cs changeSet, st map
 	var diags []inproc.ConfigDiagnostic
 	for _, c := range cs.Changes {
 		if st[c.ID] != StateApproved {
+			continue
+		}
+		if c.Op == OpAdd && overwritesElement(out.Text, c.Pointer) {
+			diags = append(diags, inproc.ConfigDiagnostic{Path: c.Pointer, Code: "add_overwrites", Message: c.ID + ": " + overwriteMessage(c.Pointer)})
 			continue
 		}
 		e, err := host.Edit(ctx, out.Handle, c.Op, c.Pointer, c.Value)
@@ -542,3 +548,104 @@ func MarkApplied(ctx context.Context, store storage.Store, host inproc.ConfigHos
 // errNoAttempt skips a thread with no attempt to derive assist.applied
 // from, writing nothing.
 var errNoAttempt = errors.New("assist: the thread has no attempt")
+
+// overwritesElement reports whether an add at pointer in text lands on an
+// element already in an array. RFC 6902 inserts there; the host sets array
+// elements in place, so such an add would replace the element. Segments
+// resolve as the host resolves them: an object's member, or an array's
+// element by index or by its id or name.
+func overwritesElement(text []byte, pointer string) bool {
+	var doc any
+	if json.Unmarshal(text, &doc) != nil || !strings.HasPrefix(pointer, "/") {
+		return false
+	}
+	parts := strings.Split(pointer[1:], "/")
+	for i, p := range parts {
+		parts[i] = strings.ReplaceAll(strings.ReplaceAll(p, "~1", "/"), "~0", "~")
+	}
+	cur := doc
+	for i, seg := range parts {
+		last := i == len(parts)-1
+		switch x := cur.(type) {
+		case map[string]any:
+			next, ok := x[seg]
+			if !ok || last {
+				return false
+			}
+			cur = next
+		case []any:
+			j, ok := element(x, seg)
+			if last {
+				return ok
+			}
+			if !ok {
+				return false
+			}
+			cur = x[j]
+		default:
+			return false
+		}
+	}
+	return false
+}
+
+// element resolves an array segment as the host does: an index, or the id
+// or name of an object element.
+func element(arr []any, seg string) (int, bool) {
+	if i, err := strconv.Atoi(seg); err == nil {
+		return i, i >= 0 && i < len(arr)
+	}
+	for i, el := range arr {
+		o, ok := el.(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, k := range []string{"id", "name"} {
+			if s, ok := o[k].(string); ok && s == seg {
+				return i, true
+			}
+		}
+	}
+	return 0, false
+}
+
+// parentPointer is the pointer to what holds pointer's target.
+func parentPointer(pointer string) string {
+	return pointer[:strings.LastIndex(pointer, "/")]
+}
+
+// overwriteMessage explains why an add onto an existing array element is
+// refused, and what to propose instead.
+func overwriteMessage(pointer string) string {
+	parent := parentPointer(pointer)
+	return "add at " + pointer + " would replace the element there, not insert before it: Open Conduit sets array elements in place. " +
+		"To append, add at " + parent + "/-; to put it at a given position, replace " + parent + " with the whole array in the order you want; to change that element, use replace"
+}
+
+// routesThreads reports whether scope, in config text, has a route with
+// the assist handler: the route that delivers Alex's messages, decisions
+// and assist.applied to its threads.
+func routesThreads(text []byte, scope domain.ID) bool {
+	var doc struct {
+		Scopes []struct {
+			ID     string `json:"id"`
+			Routes []struct {
+				Handler string `json:"handler"`
+			} `json:"routes"`
+		} `json:"scopes"`
+	}
+	if json.Unmarshal(text, &doc) != nil {
+		return true
+	}
+	for _, s := range doc.Scopes {
+		if s.ID != string(scope) {
+			continue
+		}
+		for _, r := range s.Routes {
+			if r.Handler == Type {
+				return true
+			}
+		}
+	}
+	return false
+}

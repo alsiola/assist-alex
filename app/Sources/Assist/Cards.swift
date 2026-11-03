@@ -172,17 +172,28 @@ struct ChangeSetCard: View {
             ForEach(c.problems ?? [], id: \.self) { p in
                 Text(p).font(.caption).foregroundStyle(.red)
             }
-            DisclosureGroup(isExpanded: Binding(get: { expanded.contains(c.id) }, set: { if $0 { expanded.insert(c.id) } else { expanded.remove(c.id) } })) {
-                HStack(alignment: .top, spacing: 12) {
-                    if let b = c.before { jsonBlock("Before", b) }
-                    if let a = c.after { jsonBlock(c.before == nil ? "Value" : "After", a) }
+            if c.overwrites {
+                // Shown open: approving this replaces what is there now.
+                Label("This add replaces what is at \(c.pointer) now", systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(.orange)
+                changeBlocks(c)
+            } else {
+                DisclosureGroup(isExpanded: Binding(get: { expanded.contains(c.id) }, set: { if $0 { expanded.insert(c.id) } else { expanded.remove(c.id) } })) {
+                    changeBlocks(c)
+                } label: {
+                    Text("Show the change").font(.caption)
                 }
-            } label: {
-                Text("Show the change").font(.caption)
             }
         }
         .padding(10)
         .background(RoundedRectangle(cornerRadius: 8).strokeBorder(Color(nsColor: .separatorColor)))
+    }
+
+    private func changeBlocks(_ c: CandidateChange) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            if let b = c.before { jsonBlock("Before", b) }
+            if let a = c.after { jsonBlock(c.before == nil ? "Value" : "After", a) }
+        }
     }
 
     private func jsonBlock(_ title: String, _ v: JSONValue) -> some View {

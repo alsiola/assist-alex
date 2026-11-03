@@ -75,6 +75,10 @@ struct CandidateChange: Codable, Hashable, Identifiable, Sendable {
     var problems: [String]?
     var approve: String?
     var reject: String?
+
+    /// An add onto something already there replaces it (a member of an
+    /// object; an add onto an array element is refused when proposed).
+    var overwrites: Bool { op == "add" && before != nil && before != .null }
 }
 
 struct ConfigCandidate: Codable, Hashable, Sendable {

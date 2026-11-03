@@ -26,7 +26,7 @@ func (t *Tools) accept(tx storage.Tx, a extension.Authority, typ, schema, id str
 
 type proposeInput struct {
 	Op      string          `json:"op" doc:"add, replace or remove."`
-	Pointer string          `json:"pointer" doc:"A JSON pointer into the config file; array elements by id or name (/scopes/assist/bindings/agent), - to append."`
+	Pointer string          `json:"pointer" doc:"A JSON pointer into the config file; array elements by id or name (/scopes/assist/bindings/agent), - to append. Array elements are set in place, never inserted: an add onto one is refused."`
 	Value   json.RawMessage `json:"value,omitempty" doc:"The new value, for add and replace."`
 	Why     string          `json:"why" doc:"Why you need it, in a sentence Alex can judge."`
 }
@@ -89,6 +89,9 @@ func (t *Tools) propose(ctx context.Context, a extension.Authority, in domain.Pa
 	var handle string
 	var count int
 	var done bool
+	// orphans: the change leaves the thread's scope with no assist route,
+	// so once applied nothing reaches this thread, its own fix included.
+	var orphans bool
 	if err = t.o.Store.Transact(ctx, storage.Guard{Now: t.o.Now()}, func(tx storage.Tx) error {
 		w, err := t.thread(tx, a)
 		if err != nil {
@@ -112,6 +115,9 @@ func (t *Tools) propose(ctx context.Context, a extension.Authority, in domain.Pa
 			return err
 		}
 		cand, _, _ := candidate(ctx, t.o.Config, cs, st)
+		if input.Op == OpAdd && overwritesElement(cand.Text, input.Pointer) {
+			return refuse("add_overwrites", "%s", overwriteMessage(input.Pointer))
+		}
 		e, err := t.o.Config.Edit(ctx, cand.Handle, input.Op, input.Pointer, input.Value)
 		if errors.Is(err, inproc.ErrConfigHandle) {
 			return refuse("unavailable", "the configuration moved meanwhile; propose again")
@@ -120,6 +126,7 @@ func (t *Tools) propose(ctx context.Context, a extension.Authority, in domain.Pa
 			return refuse("invalid_pointer", "%s", err.Error())
 		}
 		before := e.Before
+		orphans = routesThreads(cand.Text, w.ScopeID) && !routesThreads(e.Text, w.ScopeID)
 		latest, err := tx.LatestSequence()
 		if err != nil {
 			return err
@@ -136,6 +143,10 @@ func (t *Tools) propose(ctx context.Context, a extension.Authority, in domain.Pa
 			return domain.Payload{}, refuse("unavailable", "the configuration can't be validated now")
 		}
 		c.Diagnostics = diags
+		if orphans {
+			c.Diagnostics = append(c.Diagnostics, inproc.ConfigDiagnostic{Path: input.Pointer, Code: "orphans_threads",
+				Message: "this leaves the scope with no route for the assist handler: once applied, Alex's messages, decisions and assist.applied stop reaching its threads, this one included, so no thread can propose the fix"})
+		}
 		if err = t.o.Store.Transact(ctx, storage.Guard{Now: t.o.Now()}, func(tx storage.Tx) error {
 			w, err := t.thread(tx, a)
 			if err != nil {
