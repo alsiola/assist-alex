@@ -1,0 +1,32 @@
+{
+  "id": "assist",
+  "name": "Assist",
+  "authorization": {
+    "connections": [],
+    "read_scopes": [],
+    "operations": ["read_context", "wait", "declare_outcome", "assist.say", "assist.ask", "assist.status", "assist.spawn", "assist.read", "assist.propose", "assist.withdraw", "assist.validate"]
+  },
+  "bindings": [
+    {
+      "name": "agent",
+      "executor": "claude-code",
+      "requires": {"toolbelt": "mcp", "inject": true, "resume": true},
+      "operations": ["read_context", "wait", "declare_outcome", "assist.say", "assist.ask", "assist.status", "assist.spawn", "assist.read", "assist.propose", "assist.withdraw", "assist.validate"],
+      "secret_names": [],
+      "config": {
+        "playbook": "assist",
+        "model": "opus",
+        "permission_mode": "bypassPermissions",
+        "dir": "HOME_DIR",
+        "strict_mcp": false
+      }
+    }
+  ],
+  "routes": [
+    {"name": "threads", "handler": "assist", "binding": "agent", "active_policy": "inject", "error_fallback": "queue", "unsupported_fallback": "queue", "config": {}}
+  ],
+  "extensions": [
+    {"name": "assist", "type": "assist", "secret_names": [], "config": {"owner": "Alex"}}
+  ],
+  "secret_refs": {}
+}

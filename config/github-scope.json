@@ -1,0 +1,146 @@
+{
+  "authorization": {
+    "connections": [
+      "github"
+    ],
+    "operations": [
+      "emit",
+      "read_context",
+      "wait",
+      "declare_outcome",
+      "github.context",
+      "github.issue.view",
+      "github.issue.comment",
+      "github.issue.list",
+      "github.issue.create",
+      "github.pr.list",
+      "github.pr.view",
+      "github.pr.create",
+      "github.pr.edit",
+      "github.pr.comment",
+      "github.pr.reply",
+      "github.pr.resolve",
+      "github.pr.review",
+      "github.checks",
+      "github.attachment.upload",
+      "github.attachment.get",
+      "github.wait",
+      "github.git.credential",
+      "github.hold.status",
+      "github.hold"
+    ],
+    "read_scopes": []
+  },
+  "bindings": [
+    {
+      "config": {
+        "branch": "agent/issue-{number}",
+        "playbook": "work-issue",
+        "model": "opus",
+        "permission_mode": "bypassPermissions"
+      },
+      "connection": "github",
+      "executor": "claude-code",
+      "name": "agent",
+      "operations": [
+        "read_context",
+        "wait",
+        "declare_outcome",
+        "github.context",
+        "github.issue.view",
+        "github.issue.comment",
+        "github.issue.list",
+        "github.issue.create",
+        "github.pr.list",
+        "github.pr.view",
+        "github.pr.create",
+        "github.pr.edit",
+        "github.pr.comment",
+        "github.pr.reply",
+        "github.pr.resolve",
+        "github.pr.review",
+        "github.checks",
+        "github.attachment.upload",
+        "github.attachment.get",
+        "github.wait",
+        "github.git.credential"
+      ],
+      "requires": {
+        "inject": true,
+        "resume": true,
+        "toolbelt": "mcp",
+        "workspace": true
+      },
+      "resource": {
+        "config": {
+          "checkout": "/Users/alexyoung/code/assist-alex",
+          "mode": "work",
+          "setup": "cd extension && go mod download",
+          "setup_when": [
+            "extension/go.sum"
+          ]
+        },
+        "provider": "git"
+      },
+      "secret_names": []
+    },
+    {
+      "config": {},
+      "connection": "github",
+      "executor": "github-hold",
+      "name": "hold",
+      "operations": [
+        "emit",
+        "github.hold.status",
+        "github.hold"
+      ],
+      "requires": {
+        "toolbelt": "sdk"
+      },
+      "secret_names": []
+    }
+  ],
+  "extensions": [
+    {
+      "config": {
+        "namespace": "github/github.com/alsiola/assist-alex",
+        "repo": "alsiola/assist-alex",
+        "scope": "assist-alex",
+        "webhook_secret": "github_webhook",
+        "manage_webhook": true,
+        "admit": {
+          "authors": [
+            "OWNER"
+          ]
+        }
+      },
+      "connection": "github",
+      "name": "assist-alex",
+      "secret_names": [
+        "github_webhook"
+      ],
+      "type": "github"
+    }
+  ],
+  "id": "assist-alex",
+  "name": "alsiola/assist-alex",
+  "routes": [
+    {
+      "active_policy": "queue",
+      "binding": "hold",
+      "config": {},
+      "handler": "github-hold",
+      "name": "held"
+    },
+    {
+      "active_policy": "inject",
+      "binding": "agent",
+      "config": {},
+      "handler": "github",
+      "name": "issues"
+    }
+  ],
+  "secret_refs": {
+    "github_webhook": "keyring:github-webhook-secret"
+  }
+}

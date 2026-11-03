@@ -3,6 +3,3 @@ dist/
 build/
 *.xcodeproj/xcuserdata
 .DS_Store
-/home/memory/
-/home/threads/
-/home/extensions/

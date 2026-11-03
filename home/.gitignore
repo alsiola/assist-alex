@@ -1,0 +1,3 @@
+# The assistant's home: its memory and working files stay on this machine.
+*
+!.gitignore
