@@ -154,8 +154,6 @@ struct ThreadState: Identifiable, Hashable {
             case "assist.answer":
                 guard let a = e.body(AnswerBody.self) else { continue }
                 add(.alex(a.answer))
-            case "assist.status":
-                if let s = e.body(StatusBody.self), let line = s.status, !line.isEmpty { add(.note(line)) }
             case "assist.proposal":
                 if let p = e.body(ProposalBody.self) { add(.note("Proposed a config change: \(p.op) \(p.pointer)")) }
             case "assist.decision":

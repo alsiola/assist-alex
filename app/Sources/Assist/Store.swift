@@ -15,6 +15,8 @@ final class Store {
         case connecting
         case connected(version: String)
         case unreachable(String)
+        /// The daemon answered, but with an error.
+        case failing(String)
         case notConfigured
     }
 
@@ -26,8 +28,11 @@ final class Store {
     private(set) var threads: [String: ThreadState] = [:]
     private(set) var connection: Connection = .connecting
     /// The selected thread, or nil to write a new one.
-    var selection: String? {
-        didSet { if let id = selection { markSeen(id) } }
+    var selection: String? = UserDefaults.standard.string(forKey: "selection") {
+        didSet {
+            UserDefaults.standard.set(selection, forKey: "selection")
+            if let id = selection { markSeen(id) }
+        }
     }
     /// A request in flight, or the last one's error, for the UI.
     var busy: Set<String> = []
@@ -134,6 +139,8 @@ final class Store {
             connection = .connected(version: health.version)
             if let id = selection, NSApp.isActive { markSeen(id) }
             updateBadge()
+        } catch let e as ConduitError {
+            connection = .failing(e.localizedDescription)
         } catch {
             connection = .unreachable(error.localizedDescription)
         }

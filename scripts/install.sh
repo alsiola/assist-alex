@@ -45,9 +45,10 @@ mkdir -p "$root/home/memory" "$root/home/inbox" "$root/home/threads" "$root/home
 
 echo "==> Restarting Open Conduit so it loads the package"
 "$oc" service stop >/dev/null
-"$oc" service start >/dev/null
 i=0
 until api health state >/dev/null 2>&1; do
+	# launchd may still be unloading the old daemon: start until it runs.
+	"$oc" service status | grep -q 'running' || "$oc" service start >/dev/null 2>&1 || true
 	i=$((i + 1)); [ $i -gt 60 ] && { echo "Open Conduit didn't come back; see $state/logs/service.log" >&2; exit 1; }
 	sleep 1
 done

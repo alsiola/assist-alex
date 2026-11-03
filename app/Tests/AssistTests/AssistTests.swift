@@ -67,9 +67,9 @@ final class ThreadTests: XCTestCase {
         var t = thread
         t.events.append(event(5, "assist.answer", ["question_id": "q1", "answer": "Approve"]))
         let kinds = t.transcript.map(\.kind)
-        XCTAssertEqual(kinds.count, 5)
-        if case .question(_, let answer) = kinds[3] { XCTAssertEqual(answer, "Approve") } else { XCTFail("no question") }
-        if case .alex(let text) = kinds[4] { XCTAssertEqual(text, "Approve") } else { XCTFail("no answer") }
+        XCTAssertEqual(kinds.count, 4, "a status is the header, not a transcript line")
+        if case .question(_, let answer) = kinds[2] { XCTAssertEqual(answer, "Approve") } else { XCTFail("no question") }
+        if case .alex(let text) = kinds[3] { XCTAssertEqual(text, "Approve") } else { XCTFail("no answer") }
     }
 }
 
@@ -84,5 +84,12 @@ final class ActivityTests: XCTestCase {
         XCTAssertEqual(Activity.describe(live), "Using Gmail")
         XCTAssertEqual(Activity.phrase(tool: "Read", input: ["file_path": "/a/b.txt"]), "Reading b.txt")
         XCTAssertEqual(Activity.phrase(tool: "mcp__open-conduit__call", input: ["operation": "assist.ask"]), "Asking you something")
+    }
+}
+
+final class PathTests: XCTestCase {
+    func testWorkIDsWithSlashesStayEscapedOnce() {
+        XCTAssertEqual(Conduit.requestPath("work/\(Conduit.esc("assist/assist/abc"))/actions"), "/v1/work/assist%2Fassist%2Fabc/actions")
+        XCTAssertEqual(Conduit.requestPath("events", query: ["scope_id": "assist", "after_sequence": "5"]), "/v1/events?after_sequence=5&scope_id=assist")
     }
 }

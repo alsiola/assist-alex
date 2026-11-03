@@ -158,9 +158,6 @@ struct Conduit: Sendable {
     }
 
     private func call<T: Decodable>(_ method: String, _ path: String, query: [String: String] = [:], body: Encodable? = nil, as: T.Type) async throws -> T {
-        var comps = URLComponents()
-        comps.path = "/v1/" + path
-        if !query.isEmpty { comps.queryItems = query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) } }
         var headers = ["Authorization": "Bearer \(try token())"]
         var payload: Data?
         if let body {
@@ -169,7 +166,7 @@ struct Conduit: Sendable {
             headers["Idempotency-Key"] = "assist-" + UUID().uuidString.lowercased()
         }
         let http = UnixHTTP(socketPath: socket)
-        let res = try await http.send(method: method, path: comps.percentEncodedPath + (comps.percentEncodedQuery.map { "?" + $0 } ?? ""), headers: headers, body: payload)
+        let res = try await http.send(method: method, path: Self.requestPath(path, query: query), headers: headers, body: payload)
         if res.status >= 400 {
             let e = (try? JSONDecoder().decode(ErrorEnvelope.self, from: res.body))?.error
             throw ConduitError(status: res.status, code: e?.code ?? "http_\(res.status)", message: e?.message ?? "")
@@ -181,7 +178,16 @@ struct Conduit: Sendable {
         }
     }
 
-    private static func esc(_ id: String) -> String {
+    /// The request target: path segments already escaped with esc, so an
+    /// ID's "/" stays %2F and is never escaped twice.
+    static func requestPath(_ path: String, query: [String: String] = [:]) -> String {
+        var comps = URLComponents()
+        comps.percentEncodedPath = "/v1/" + path
+        if !query.isEmpty { comps.queryItems = query.sorted { $0.key < $1.key }.map { URLQueryItem(name: $0.key, value: $0.value) } }
+        return comps.percentEncodedPath + (comps.percentEncodedQuery.map { "?" + $0 } ?? "")
+    }
+
+    static func esc(_ id: String) -> String {
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove(charactersIn: "/")
         return id.addingPercentEncoding(withAllowedCharacters: allowed) ?? id
@@ -206,11 +212,11 @@ struct Conduit: Sendable {
         var out: [ConduitEvent] = []
         var after = after
         while true {
-            let page = try await call("GET", "events", query: ["scope_id": scope, "after_sequence": String(after), "limit": "500"], as: Page<ConduitEvent>.self)
+            let page = try await call("GET", "events", query: ["scope_id": scope, "after_sequence": String(after), "limit": "200"], as: Page<ConduitEvent>.self)
             if page.items.isEmpty { break }
             out += page.items
             after = page.items.map(\.seq).max() ?? after
-            if page.items.count < 500 { break }
+            if page.items.count < 200 { break }
         }
         return out
     }

@@ -28,9 +28,13 @@ struct AssistApp: App {
             MenuBarContent(openMain: { openWindow(id: "main") })
                 .environment(store)
         } label: {
-            let n = store.needsYouCount
-            Image(systemName: n > 0 ? "bubble.left.and.exclamationmark.bubble.right.fill" : "bubble.left.and.bubble.right")
-            if n > 0 { Text("\(n)") }
+            MenuBarLabel(count: store.needsYouCount)
+                .onAppear {
+                    // Open the main window at launch, and whenever the Dock
+                    // icon is clicked with no window showing.
+                    AppDelegate.showMain = { openWindow(id: "main"); NSApp.activate(ignoringOtherApps: true) }
+                    if !NSApp.windows.contains(where: { $0.isVisible && $0.canBecomeMain }) { AppDelegate.showMain?() }
+                }
         }
 
         Settings {
@@ -39,7 +43,22 @@ struct AssistApp: App {
     }
 }
 
+struct MenuBarLabel: View {
+    let count: Int
+    var body: some View {
+        Image(systemName: count > 0 ? "bubble.left.and.exclamationmark.bubble.right.fill" : "bubble.left.and.bubble.right")
+        if count > 0 { Text("\(count)") }
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    static var showMain: (() -> Void)?
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows { AppDelegate.showMain?() }
+        return true
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         Task { @MainActor in Store.shared.start() }
@@ -102,7 +121,7 @@ struct SettingsView: View {
                 case .connected(let v): Text("Open Conduit \(v)")
                 case .connecting: Text("Connecting…")
                 case .notConfigured: Text("No \(store.scope) scope")
-                case .unreachable(let m): Text(m).foregroundStyle(.secondary)
+                case .unreachable(let m), .failing(let m): Text(m).foregroundStyle(.secondary)
                 }
             }
         }

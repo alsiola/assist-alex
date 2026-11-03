@@ -41,12 +41,14 @@ struct ThreadList: View {
                     ForEach(store.needsYou) { ThreadRow(thread: $0).tag(Optional($0.id)) }
                 }
             }
-            Section(store.needsYou.isEmpty ? "Threads" : "Everything else") {
-                if store.active.isEmpty && store.needsYou.isEmpty {
-                    Text("Nothing on the go")
-                        .foregroundStyle(.secondary)
+            if !store.active.isEmpty || store.needsYou.isEmpty {
+                Section(store.needsYou.isEmpty ? "Threads" : "Everything else") {
+                    if store.active.isEmpty {
+                        Text("Nothing on the go")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(store.active) { ThreadRow(thread: $0).tag(Optional($0.id)) }
                 }
-                ForEach(store.active) { ThreadRow(thread: $0).tag(Optional($0.id)) }
             }
             if !store.closed.isEmpty {
                 Section(isExpanded: $showClosed) {
@@ -94,8 +96,8 @@ struct ThreadRow: View {
                 }
                 if let need = thread.needLabel {
                     Text(need)
-                        .font(.callout)
-                        .foregroundStyle(.orange)
+                        .font(.callout.weight(.medium))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 } else if let line = thread.isRunning ? (thread.activity ?? thread.statusLine) : (thread.statusLine ?? thread.preview) {
                     Text(line)
@@ -132,6 +134,9 @@ struct ConnectionFooter: View {
             case .unreachable:
                 Circle().fill(.red).frame(width: 6, height: 6)
                 Text("Open Conduit isn't running").foregroundStyle(.secondary)
+            case .failing(let m):
+                Circle().fill(.orange).frame(width: 6, height: 6)
+                Text(m).foregroundStyle(.secondary).lineLimit(2)
             }
             Spacer()
         }
@@ -232,7 +237,12 @@ struct Transcript: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
-                    let items = thread.transcript
+                    // The open question is the card below, not a bubble too.
+                    let open = thread.openQuestion?.question_id
+                    let items = thread.transcript.filter { item in
+                        if case .question(let q, nil) = item.kind, q.question_id == open { return false }
+                        return true
+                    }
                     ForEach(Array(items.enumerated()), id: \.element.id) { i, item in
                         if i == 0 || item.date.timeIntervalSince(items[i - 1].date) > 3600 {
                             Text(item.date, format: .dateTime.weekday(.wide).day().month().hour().minute())
@@ -428,7 +438,6 @@ struct Composer: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
-        .onAppear { focused = true }
         .onDrop(of: [.fileURL], isTargeted: $dropping) { providers in
             for p in providers {
                 _ = p.loadObject(ofClass: URL.self) { url, _ in
