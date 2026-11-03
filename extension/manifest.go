@@ -9,8 +9,13 @@ import (
 	"github.com/open-conduit/open-conduit/protocol"
 )
 
-// Version is this package's own version.
-const Version = "0.1.0"
+// Unversioned is Version in a build that wasn't stamped with one.
+const Unversioned = "unversioned"
+
+// Version is this package's own version. `make package` stamps it from
+// scripts/version.sh (-ldflags "-X …/extension.Version=…"), so it names
+// the release and the commit the package was built from.
+var Version = Unversioned
 
 // Command is the package's executable, relative to its directory.
 const Command = "assist-extension"

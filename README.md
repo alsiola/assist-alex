@@ -14,7 +14,7 @@ Alex's personal assistant, built on [Open Conduit](https://github.com/open-condu
 | `app/` | The Mac app (SwiftUI). Talks to the daemon's local management API over its Unix socket with your operator token. |
 | `config/` | The `assist` scope, the `assist-alex` scope that works this repository's issues, and the template for the assistant's standing brief. |
 | `home/` | The assistant's working directory: its brief (`CLAUDE.md`), memory, thread files and your attachments. Never committed. |
-| `scripts/` | `install.sh` (everything below) and `build-app.sh`. |
+| `scripts/` | `install.sh` (everything below), `build-app.sh` and `version.sh`. |
 
 ## Install
 
@@ -44,6 +44,10 @@ make test                      # extension: gofmt, vet, race tests (incl. a real
 make app                       # rebuild and reinstall Assist.app
 open-conduit extension certify extension/dist/assist
 ```
+
+### Versions
+
+`VERSION` holds the release; `scripts/version.sh` stamps it into the extension package and the app at build time. A build of the commit tagged `v<VERSION>` is just the release (`0.1.0`); any other build adds the short SHA (`0.1.0+611ceeb`), and uncommitted changes add `-dirty`. The app shows the release as its version and the SHA as its build. The build fails if git can't say which commit it is. To cut a release, bump `VERSION`, commit, and tag that commit `v<VERSION>`.
 
 ## Trust
 
