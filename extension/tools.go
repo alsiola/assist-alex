@@ -117,7 +117,7 @@ func (t *Tools) Registration() extension.Registration {
 				Guidance: "Alex sees only what you send with `assist.say` and `assist.ask`; nothing you print reaches him. Default to `quiet`. Use `fyi` for a result he'll want to see today, and `now` only when waiting would cost him (a deadline, money, something broken). Never send progress chatter: update `assist.status` instead."},
 			{Name: OpAsk, Wait: t.ask, Input: extension.InputSchema[askInput](),
 				Summary:  "Ask Alex for a decision, approval, secret or action, and park the thread until he answers.",
-				Guidance: "Batch what you need into one ask with likely answers as `choices`, and say what you recommend in `context`. Ask for an `approval` before anything irreversible or outward-facing (sending as him, paying, deleting, booking). Ask for a `secret` by name: his app stores it in the keychain and you get back the reference (`keyring:NAME`) to use in config; never ask him to paste a credential into a message. After asking, end your turn: his answer, or any message he sends, resumes you. A message closes the question too, so if it doesn't answer what you asked, ask again."},
+				Guidance: "Batch what you need into one ask with likely answers as `choices`, and say what you recommend in `context`. Ask for an `approval` before anything irreversible or outward-facing (sending as him, paying, deleting, booking). Ask for a `secret` by name: his app stores it in the keychain and you get back the reference (`keyring:NAME`) to use in config; never ask him to paste a credential into a message. Make the ask your last toolbelt call: it parks the thread at once, and every toolbelt call after it this turn (`say`, `status`, `spawn`) is refused. Send those first, then ask and end your turn. His answer, or any message he sends, resumes you. A message closes the question too, so if it doesn't answer what you asked, ask again."},
 			{Name: OpStatus, Emit: t.status, Input: extension.InputSchema[statusInput](),
 				Summary:  "Name the thread and say in one line where the job stands.",
 				Guidance: "Set a title early, and update the status whenever the job moves, so Alex can see where everything is without reading the thread."},
@@ -429,7 +429,7 @@ func (t *Tools) ask(ctx context.Context, a extension.Authority, in domain.Payloa
 	return extension.WaitPlan{
 		Wait: extension.WaitRequest{Match: domain.EventMatch{Types: []string{TypeAnswer, TypeMessage}}, Timeout: &deadline, Description: what},
 		Output: payload(SchemaTool, map[string]any{"asked": true, "deadline": deadline.Format(time.RFC3339),
-			"next": "end your turn now; you are resumed with his answer or message, or at the deadline without one"}),
+			"next": "end your turn now: the thread is parked, and every further toolbelt call this turn is refused. A message he sends before the turn ends can't be answered until you are resumed. You are resumed with his answer or message, or at the deadline without one"}),
 	}, nil
 }
 
