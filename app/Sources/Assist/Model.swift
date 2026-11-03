@@ -82,6 +82,39 @@ struct ThreadState: Identifiable, Hashable {
     var openChanges: [CandidateChange] { candidate?.open ?? [] }
     var readyToApply: Bool { candidate?.readyToApply ?? false }
 
+    /// The last Event seq when Alex applied this thread's change set from
+    /// the app, so the card can stay up as "Applied" afterwards.
+    var appliedAt: Int?
+
+    /// What the change set card shows, if anything.
+    enum ChangeSet: Hashable {
+        /// Changes to review, approve or apply.
+        case review(ConfigCandidate)
+        /// Alex applied the changes; `generation` once Open Conduit has
+        /// confirmed the generation they went live in.
+        case applied(generation: String?)
+    }
+
+    /// The change set card's state. After an apply the card stays, without
+    /// buttons, until the thread moves on (Alex writes or answers, or the
+    /// assistant asks or proposes again), so it never leaves the view tree
+    /// in the same update that reloads the thread. Tearing it down there
+    /// crashed the app inside SwiftUI on macOS 27.0.
+    var changeSet: ChangeSet? {
+        if !openChanges.isEmpty || readyToApply, let c = candidate { return .review(c) }
+        guard let at = appliedAt else { return nil }
+        var generation: String?
+        for e in events where e.seq > at {
+            switch e.type {
+            case "assist.applied": generation = e.body(AppliedBody.self)?.generation ?? generation
+            case "assist.proposal", "assist.question", "assist.answer": return nil
+            case "assist.message" where e.body(MessageBody.self)?.role == "operator": return nil
+            default: continue
+            }
+        }
+        return .applied(generation: generation)
+    }
+
     var needsYou: Bool { work.isOpen && (openQuestion != nil || !openChanges.isEmpty || readyToApply) }
     var isRunning: Bool { work.state == "running" }
 

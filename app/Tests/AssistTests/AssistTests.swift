@@ -71,6 +71,42 @@ final class ThreadTests: XCTestCase {
         if case .question(_, let answer) = kinds[2] { XCTAssertEqual(answer, "Approve") } else { XCTFail("no question") }
         if case .alex(let text) = kinds[3] { XCTAssertEqual(text, "Approve") } else { XCTFail("no answer") }
     }
+
+    func change(_ state: String) -> CandidateChange {
+        CandidateChange(id: "c1", op: "add", pointer: "/routes/-", state: state, why: "Email check-ins")
+    }
+
+    func testChangeSetToReviewThenApplied() {
+        var t = thread
+        t.candidate = ConfigCandidate(config_text: "{}", changes: [change("approved")])
+        guard case .review = t.changeSet else { return XCTFail("approved changes are up for review") }
+
+        // Applied from the app: the candidate empties in the same reload.
+        t.appliedAt = t.lastSeq
+        t.candidate = ConfigCandidate(config_text: "{}", changes: [change("applied")])
+        XCTAssertEqual(t.changeSet, .applied(generation: nil), "the card stays, as applied, after the reload")
+
+        t.events.append(event(5, "assist.applied", ["generation": "32", "changes": ["c1"]]))
+        t.events.append(event(6, "assist.message", ["role": "agent", "text": "Check-ins are on.", "notify": "fyi"]))
+        XCTAssertEqual(t.changeSet, .applied(generation: "32"), "the assistant's reply doesn't move the thread on")
+
+        t.events.append(event(7, "assist.message", ["role": "operator", "text": "Thanks"]))
+        XCTAssertNil(t.changeSet, "Alex writing moves the thread on")
+    }
+
+    func testAppliedCardGoesWhenTheAssistantProposesAgain() {
+        var t = thread
+        t.appliedAt = t.lastSeq
+        XCTAssertNotNil(t.changeSet)
+        t.events.append(event(5, "assist.proposal", ["change": "c2", "op": "add", "pointer": "/x"]))
+        XCTAssertNil(t.changeSet)
+    }
+
+    func testNoChangeSetWithoutChangesOrApply() {
+        var t = thread
+        t.candidate = ConfigCandidate(config_text: "{}", changes: [change("rejected")])
+        XCTAssertNil(t.changeSet)
+    }
 }
 
 final class ActivityTests: XCTestCase {
