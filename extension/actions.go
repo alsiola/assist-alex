@@ -59,9 +59,14 @@ func (a Actions) transact(ctx context.Context, fn func(storage.Tx) error) error 
 // thread is parked and its latest question is the last thing that parked
 // it. A package can't read Waits, so this is read from the record: the
 // thread is waiting, its question was asked, no answer to it has been
-// accepted, and no attempt has started since it was asked (the asking
-// attempt ends on the wait; a later one was started by something else,
-// such as his message).
+// accepted, he has written nothing on the thread since it was asked, and
+// no attempt has started since it was asked (the asking attempt ends on
+// the wait; a later one was started by something else, such as his
+// message).
+//
+// Any message he writes after the question closes it, whether it resumed
+// the thread or reached the asking turn while it was still running: the
+// agent reads the message and asks again if it didn't answer.
 func question(tx storage.Tx, w domain.Work) (Question, bool, error) {
 	if w.Kind != WorkKind || w.State != domain.WorkWaiting {
 		return Question{}, false, nil
@@ -85,6 +90,9 @@ func question(tx storage.Tx, w domain.Work) (Question, bool, error) {
 			json.Unmarshal(e.Event.Data.Data, &p) == nil && p.Question == q.ID {
 			return q, false, nil
 		}
+		if asked != 0 && fromAlex(e.Event, key) {
+			return q, false, nil
+		}
 		var x Question
 		if asked == 0 && e.Event.Type == TypeQuestion && e.Event.WorkID == w.ID && json.Unmarshal(e.Event.Data.Data, &x) == nil && x.ID == q.ID {
 			asked = e.Sequence
@@ -99,6 +107,13 @@ func question(tx storage.Tx, w domain.Work) (Question, bool, error) {
 		}
 	}
 	return q, true, nil
+}
+
+// fromAlex reports whether e is a message he wrote on the thread.
+func fromAlex(e domain.Event, key domain.CorrelationKey) bool {
+	var m Message
+	return e.Type == TypeMessage && e.CorrelationKey != nil && *e.CorrelationKey == key &&
+		json.Unmarshal(e.Data.Data, &m) == nil && m.Role == RoleOperator
 }
 
 func (a Actions) Actions(ctx context.Context, t extension.ActionTarget) ([]extension.Action, error) {

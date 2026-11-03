@@ -111,3 +111,57 @@ func hasAction(actions []client.Action, id string) bool {
 	}
 	return false
 }
+
+// TestDaemonMessageSupersedesAsk: a message Alex writes while the thread
+// waits on a question resumes it and closes the question, so the app stops
+// offering an answer to it, even when the agent's next turn parks again
+// without asking anything new.
+func TestDaemonMessageSupersedesAsk(t *testing.T) {
+	d := extensiontest.Daemon(t, extensiontest.Package("."), extensiontest.UseFakeClaude())
+	agent := d.Agent().
+		Call("assist.ask", map[string]any{"question": "Can you send the photos?", "choices": []string{"Sending now", "Later"}}).
+		Ends("help").
+		Turn().Call("assist.say", map[string]any{"text": "Got them, listing it."}).Ends("help").
+		Turn().Ends("finished")
+
+	c := d.Client()
+	ctx := context.Background()
+	scopes, err := c.Scopes(ctx, nil)
+	if err != nil || len(scopes.Items) != 1 {
+		t.Fatalf("scopes: %+v %v", scopes, err)
+	}
+	if _, err = c.InvokeAction(ctx, client.ActionTarget{ScopeID: scopes.Items[0].ID}, "assist", "start", "Sell the coffee machine", "start-1"); err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	var thread client.Work
+	d.Until("the thread", 30*time.Second, func() bool {
+		ws, err := c.Works(ctx, nil)
+		if err != nil || len(ws.Items) == 0 {
+			return false
+		}
+		thread = ws.Items[0]
+		return true
+	})
+	agent.Played(1)
+	d.WaitWork(thread.ID, "waiting")
+	if actions, err := c.Actions(ctx, client.ActionTarget{WorkID: thread.ID}); err != nil || !hasAction(actions, "answer") {
+		t.Fatalf("actions while asking: %+v %v", actions, err)
+	}
+	if _, err = c.InvokeAction(ctx, client.ActionTarget{WorkID: thread.ID}, "assist", "message", "These are the two I have", "msg-1"); err != nil {
+		t.Fatalf("message: %v", err)
+	}
+	second := agent.Played(2)
+	if !strings.Contains(second.Input, "These are the two I have") {
+		t.Fatalf("resumed with %q", second.Input)
+	}
+	d.Until("the turn to end", 30*time.Second, func() bool {
+		w, err := c.Work(ctx, thread.ID)
+		return err == nil && w.State != "running" && w.State != "queued"
+	})
+	if actions, err := c.Actions(ctx, client.ActionTarget{WorkID: thread.ID}); err != nil || hasAction(actions, "answer") {
+		t.Fatalf("answer still offered after his message: %+v %v", actions, err)
+	}
+	if _, err = c.InvokeAction(ctx, client.ActionTarget{WorkID: thread.ID}, "assist", "answer", "Sending now", "answer-1"); err == nil {
+		t.Fatal("answered a question his message superseded")
+	}
+}
