@@ -272,6 +272,7 @@ final class Store {
             let c = try await self.conduit.candidate(work: id)
             guard c.readyToApply else { throw ConduitError(status: 0, code: "nothing_to_apply", message: "No approved changes to apply.") }
             try await self.conduit.apply(c)
+            self.threads[id]?.appliedAt = self.threads[id]?.lastSeq ?? 0
         }
         await reload(id)
     }

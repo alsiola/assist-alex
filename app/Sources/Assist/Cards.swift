@@ -116,44 +116,68 @@ struct QuestionCard: View {
     }
 }
 
-/// The config changes the assistant proposed, for Alex to decide and apply.
+/// The config changes the assistant proposed, for Alex to decide and apply,
+/// and then that they were applied.
+///
+/// The buttons' actions capture only the thread's ID and the store, not
+/// the view or the thread: SwiftUI keeps them in its button responders
+/// after the card changes, and the crash in #8 was in releasing one.
 struct ChangeSetCard: View {
     @Environment(Store.self) private var store
-    let thread: ThreadState
-    let candidate: ConfigCandidate
+    let threadID: String
+    let changeSet: ThreadState.ChangeSet
     @State private var expanded: Set<String> = []
 
-    private var busy: Bool { store.busy.contains("decide:\(thread.id)") || store.busy.contains("apply:\(thread.id)") }
+    private var busy: Bool { store.busy.contains("decide:\(threadID)") || store.busy.contains("apply:\(threadID)") }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(candidate.open.isEmpty ? "Approved config changes" : "Config changes to review")
-                    .font(.body.weight(.medium))
-                Spacer()
-                if busy { ProgressView().controlSize(.small) }
-                if let all = candidate.approve_all, candidate.open.count > 1 {
-                    Button("Approve all \(candidate.open.count)") { Task { await store.decide(thread.id, action: all) } }
-                }
-                if candidate.readyToApply {
-                    Button("Apply \(candidate.approved.count)") { Task { await store.apply(thread.id) } }
-                        .buttonStyle(.borderedProminent)
-                        .help("Writes the approved changes to Open Conduit's config and activates them")
-                }
+            switch changeSet {
+            case .review(let candidate): review(candidate)
+            case .applied(let generation): applied(generation)
             }
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(candidate.changes ?? []) { c in
-                        if c.state == "proposed" || c.state == "approved" { changeRow(c) }
-                    }
-                }
-            }
-            .frame(maxHeight: 260)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(nsColor: .underPageBackgroundColor).opacity(0.5))
         .disabled(busy)
+    }
+
+    @ViewBuilder private func review(_ candidate: ConfigCandidate) -> some View {
+        let id = threadID, store = store
+        HStack {
+            Text(candidate.open.isEmpty ? "Approved config changes" : "Config changes to review")
+                .font(.body.weight(.medium))
+            Spacer()
+            if busy { ProgressView().controlSize(.small) }
+            if let all = candidate.approve_all, candidate.open.count > 1 {
+                Button("Approve all \(candidate.open.count)") { Task { await store.decide(id, action: all) } }
+            }
+            if candidate.readyToApply {
+                Button("Apply \(candidate.approved.count)") { Task { await store.apply(id) } }
+                    .buttonStyle(.borderedProminent)
+                    .help("Writes the approved changes to Open Conduit's config and activates them")
+            }
+        }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(candidate.changes ?? []) { c in
+                    if c.state == "proposed" || c.state == "approved" { changeRow(c) }
+                }
+            }
+        }
+        .frame(maxHeight: 260)
+    }
+
+    @ViewBuilder private func applied(_ generation: String?) -> some View {
+        HStack {
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+            Text("Config changes applied").font(.body.weight(.medium))
+            Spacer()
+        }
+        Text(generation.map { "Live as generation \($0)." } ?? "Waiting for Open Conduit to load them.")
+            .foregroundStyle(.secondary)
     }
 
     private func changeRow(_ c: CandidateChange) -> some View {
@@ -164,8 +188,9 @@ struct ChangeSetCard: View {
                 if c.state == "approved" {
                     Text("Approved").foregroundStyle(.secondary)
                 } else {
-                    if let r = c.reject { Button("Reject") { Task { await store.decide(thread.id, action: r) } } }
-                    if let a = c.approve { Button("Approve") { Task { await store.decide(thread.id, action: a) } } }
+                    let id = threadID, store = store
+                    if let r = c.reject { Button("Reject") { Task { await store.decide(id, action: r) } } }
+                    if let a = c.approve { Button("Approve") { Task { await store.decide(id, action: a) } } }
                 }
             }
             Text(c.why).foregroundStyle(.secondary)

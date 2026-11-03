@@ -162,9 +162,9 @@ struct ThreadView: View {
                     Divider()
                     QuestionCard(thread: thread, question: q)
                 }
-                if !thread.openChanges.isEmpty || thread.readyToApply, let c = thread.candidate {
+                if let changeSet = thread.changeSet {
                     Divider()
-                    ChangeSetCard(thread: thread, candidate: c)
+                    ChangeSetCard(threadID: thread.id, changeSet: changeSet)
                 }
                 if let err = store.lastError {
                     ErrorLine(message: err)
