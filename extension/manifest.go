@@ -42,7 +42,7 @@ func Manifest() protocol.Manifest {
 		Routes:     []protocol.RouteDecl{{Handler: Type, Config: true, Samples: true}},
 		WorkKinds:  []protocol.WorkKindDecl{{Kind: WorkKind}},
 		EntryGated: true,
-		Tasks:      []protocol.TaskDecl{{Name: AppliedTask, IntervalSeconds: 1}},
+		Tasks:      []protocol.TaskDecl{{Name: AppliedTask, IntervalSeconds: 1}, {Name: IndexTask, IntervalSeconds: 1}},
 		Actions:    true,
 		Panels:     true,
 		// Core reviews and applies the change set.

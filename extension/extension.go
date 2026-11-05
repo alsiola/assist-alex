@@ -138,7 +138,7 @@ func (x *Extension) Build() *sdk.Extension {
 	for _, op := range x.tools.Registration().Operations {
 		ext.Operations = append(ext.Operations, x.bound(op))
 	}
-	ext.Tasks = map[string]func(context.Context, *sdk.Host) error{AppliedTask: x.checkApplied}
+	ext.Tasks = map[string]func(context.Context, *sdk.Host) error{AppliedTask: x.checkApplied, IndexTask: x.index}
 	ext.Render = RenderEvent
 	ext.Actions = func(ctx context.Context, h *sdk.Host, t extension.ActionTarget) ([]extension.Action, error) {
 		x.bind(h)

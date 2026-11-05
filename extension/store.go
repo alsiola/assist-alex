@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/open-conduit/open-conduit/domain"
@@ -212,13 +213,30 @@ func (t *hostTx) Events(after uint64, limit int) ([]domain.AcceptedEvent, error)
 }
 
 // LatestSequence is the last sequence of the extension's scopes: the
-// watermark assist compares its threads' Events against.
+// watermark assist compares its threads' Events against. It reads on from
+// the thread index's cursor (index.go), so only the few Events the index
+// task hasn't reached yet, rather than the whole log. The cursor is read
+// outside the transaction's checks: the task moves it all the time, and a
+// watermark taken from an older cursor is still the latest sequence.
 func (t *hostTx) LatestSequence() (uint64, error) {
-	all, err := t.Events(0, 0)
-	if err != nil || len(all) == 0 {
+	var cursor uint64
+	b, _, err := t.h.Get(t.ctx, nsIndex, keyCursor)
+	switch {
+	case err == nil:
+		if cursor, err = strconv.ParseUint(string(b), 10, 64); err != nil {
+			return 0, err
+		}
+	case !errors.Is(err, storage.ErrNotFound):
 		return 0, err
 	}
-	return all[len(all)-1].Sequence, nil
+	tail, err := t.Events(cursor, 0)
+	if err != nil {
+		return 0, err
+	}
+	if len(tail) == 0 {
+		return cursor, nil
+	}
+	return tail[len(tail)-1].Sequence, nil
 }
 
 // AcceptFunc records an Event of the extension's own families in scope,

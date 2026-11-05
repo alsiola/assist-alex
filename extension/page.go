@@ -37,7 +37,8 @@ func (*Extension) Pages() []extension.Page {
 	}}
 }
 
-// Panels shows a thread as its conversation.
+// Panels shows a thread as its conversation, from the thread index
+// (index.go) rather than the whole log.
 func (a Actions) Panels(ctx context.Context, t extension.ActionTarget) ([]extension.Panel, error) {
 	if t.Work == nil || t.Work.Kind != WorkKind {
 		return nil, nil
@@ -45,12 +46,8 @@ func (a Actions) Panels(ctx context.Context, t extension.ActionTarget) ([]extens
 	w := *t.Work
 	var events []domain.AcceptedEvent
 	if err := a.transact(ctx, func(tx storage.Tx) error {
-		all, err := tx.Events(0, 0)
-		for _, e := range all {
-			if e.Event.WorkID == w.ID || e.RoutedWorkID == w.ID {
-				events = append(events, e)
-			}
-		}
+		var err error
+		events, err = threadEvents(tx, w.ID)
 		return err
 	}); err != nil {
 		return nil, err

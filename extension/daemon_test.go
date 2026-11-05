@@ -101,6 +101,24 @@ func TestDaemonThread(t *testing.T) {
 		t.Fatalf("resumed with %q", third.Input)
 	}
 	d.WaitWork(thread.ID, "completed")
+
+	// The conversation panel reads the thread from the index the task keeps.
+	want := "Get the boiler serviced before winter|Found two engineers; British Gas can do Thursday.|Book British Gas for Thursday 9-12, £89?|Approve|Booked.|Thanks, all done"
+	var got string
+	d.Until("the conversation", 30*time.Second, func() bool {
+		panels, err := c.Panels(ctx, client.ActionTarget{WorkID: thread.ID})
+		if err != nil || len(panels) != 1 || len(panels[0].Sections) != 1 {
+			return false
+		}
+		var texts []string
+		for _, m := range panels[0].Sections[0].Messages {
+			if m.From != "note" {
+				texts = append(texts, m.Text)
+			}
+		}
+		got = strings.Join(texts, "|")
+		return got == want
+	})
 }
 
 func hasAction(actions []client.Action, id string) bool {
