@@ -85,3 +85,20 @@ func (Route) Samples(_ context.Context, in extension.SampleInput) []extension.Ro
 		Event: domain.Event{Type: TypeStart, Source: extension.ActionSource, CorrelationKey: &key,
 			Data: payload(SchemaStart, Start{Text: "Find me a dentist near the office", Role: RoleOperator})}}}
 }
+
+// reachesThread is whether the route takes e to the thread its key names,
+// by Match's rule: a start Alex or the assistant opened it with, Alex's own
+// input, and the generation that applies its changes. The thread index
+// reads an Event's thread from its key by this rule, as the Event may not
+// have been routed yet.
+func reachesThread(e domain.Event) bool {
+	switch e.Type {
+	case TypeStart:
+		return e.Source == extension.ActionSource || strings.HasPrefix(e.Source, "execution/")
+	case TypeMessage, TypeAnswer, TypeDecision, TypeChecks:
+		return e.Source == extension.ActionSource
+	case TypeApplied:
+		return e.Source == extension.ActionSource || e.Source == Type
+	}
+	return false
+}
