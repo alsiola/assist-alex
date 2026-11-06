@@ -2,6 +2,7 @@ package assist
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -231,5 +232,60 @@ func TestThreadEventsAfter(t *testing.T) {
 		if st[id] != s {
 			t.Errorf("%s: %q, want %q", id, st[id], s)
 		}
+	}
+}
+
+// slowStore is a memStore whose transactions take until their context ends
+// once the first `fast` have run: a page that can't be read in the run's
+// time.
+type slowStore struct {
+	*memStore
+	fast int
+}
+
+func (s *slowStore) Transact(ctx context.Context, g storage.Guard, fn func(storage.Tx) error) error {
+	if s.fast > 0 {
+		s.fast--
+		return s.memStore.Transact(ctx, g, fn)
+	}
+	<-ctx.Done()
+	return ctx.Err()
+}
+
+// TestIndexRunStuck: a run that runs out of time before it commits a page
+// fails, so a stuck index shows as a failing task; one that commits a page
+// first, or is stopped by its caller, does not.
+func TestIndexRunStuck(t *testing.T) {
+	full := func() *memStore {
+		s := &memStore{kv: map[string][]byte{}}
+		for i := range 3 * indexPage {
+			s.log = append(s.log, domain.AcceptedEvent{Event: domain.Event{ID: domain.ID(fmt.Sprint("e", i+1)), Type: TypeMessage, WorkID: WorkID("assist", "abc")}, Sequence: uint64(i + 1)})
+		}
+		return s
+	}
+	now := func() time.Time { return time.Unix(0, 0) }
+	budget := 20 * time.Millisecond
+
+	err := IndexRun(context.Background(), &slowStore{memStore: full()}, now, budget)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("no page committed: %v, want a deadline error", err)
+	}
+
+	s := full()
+	if err := IndexRun(context.Background(), &slowStore{memStore: s, fast: 1}, now, budget); err != nil {
+		t.Fatalf("a page committed: %v", err)
+	}
+	if c, _ := readCursorFrom(s); c != indexPage {
+		t.Fatalf("cursor %d, want %d", c, indexPage)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), budget/2)
+	defer cancel()
+	if err := IndexRun(ctx, &slowStore{memStore: full()}, now, time.Minute); err != nil {
+		t.Fatalf("stopped by the caller: %v", err)
+	}
+
+	if err := IndexRun(context.Background(), full(), now, time.Minute); err != nil {
+		t.Fatalf("caught up: %v", err)
 	}
 }

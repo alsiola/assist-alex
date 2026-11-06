@@ -133,16 +133,36 @@ func IndexOnce(ctx context.Context, store storage.Store, now func() time.Time) (
 // the run's time is up.
 func (x *Extension) index(ctx context.Context, h *sdk.Host) error {
 	x.bind(h)
-	ctx, cancel := context.WithTimeout(ctx, indexRun)
+	return IndexRun(ctx, x.store, x.now, indexRun)
+}
+
+// IndexRun is one run of the index task: it indexes page after page until
+// the log ends or budget passes. A run that commits at least one page and
+// then runs out of time has made progress, and the next run carries on. A
+// run that runs out of time before committing any page is an error: the
+// cursor hasn't moved, so the next run will do the same, and the index is
+// stuck until a page fits in the budget. Reporting it makes the task fail,
+// so a stuck index shows in doctor rather than passing for a good run. A
+// run stopped by the caller's context (the daemon stopping) is not an error.
+func IndexRun(ctx context.Context, store storage.Store, now func() time.Time, budget time.Duration) error {
+	run, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
+	pages := 0
 	for {
-		more, err := IndexOnce(ctx, x.store, x.now)
+		more, err := IndexOnce(run, store, now)
 		if err != nil {
 			if ctx.Err() != nil {
 				return nil
 			}
-			return err
+			if run.Err() == nil {
+				return err
+			}
+			if pages > 0 {
+				return nil
+			}
+			return fmt.Errorf("the thread index committed no page in %s, so its cursor is stuck: %w", budget, err)
 		}
+		pages++
 		if !more {
 			return nil
 		}
