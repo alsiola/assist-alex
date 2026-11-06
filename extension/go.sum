@@ -49,6 +49,8 @@ github.com/ncruces/go-strftime v0.1.9 h1:bY0MQC28UADQmHmaF5dgpLmImcShSi2kHU9XLdh
 github.com/ncruces/go-strftime v0.1.9/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
 github.com/open-conduit/open-conduit v1.14.1-0.20261102162637-37f993d16355 h1:7P/XxsVTodaZH5BLC+ZeClktXgzHPWtgh+W14V+Dyf4=
 github.com/open-conduit/open-conduit v1.14.1-0.20261102162637-37f993d16355/go.mod h1:9HWFuMQEqGMFfSQWJW3Qgmg8k2RmSv4bZ/YsN8FiEJc=
+github.com/open-conduit/open-conduit v1.14.1-0.20261106172644-dedeb124b6f2 h1:KZA5im73SEV1M0F1vl/tH53NB811Buvdiyg9zvsn7xY=
+github.com/open-conduit/open-conduit v1.14.1-0.20261106172644-dedeb124b6f2/go.mod h1:9HWFuMQEqGMFfSQWJW3Qgmg8k2RmSv4bZ/YsN8FiEJc=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=

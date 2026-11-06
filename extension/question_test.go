@@ -18,24 +18,14 @@ type threadTx struct {
 	execs  []domain.Execution
 }
 
-func (t threadTx) Get(ns, _ string) ([]byte, error) {
-	if ns == nsIndex {
-		return nil, storage.ErrNotFound
-	}
-	return json.Marshal(t.q)
+func (t threadTx) Get(string, string) ([]byte, error) { return json.Marshal(t.q) }
+
+func (t threadTx) Events(after uint64, limit int) ([]domain.AcceptedEvent, error) {
+	return logEvents(t.events, after, limit, func(domain.AcceptedEvent) bool { return true })
 }
 
-// List: nothing is indexed yet, so question reads the thread from the tail.
-func (t threadTx) List(_, _ string) ([]storage.Entry, error) { return nil, nil }
-
-func (t threadTx) Events(after uint64, _ int) ([]domain.AcceptedEvent, error) {
-	var out []domain.AcceptedEvent
-	for _, e := range t.events {
-		if e.Sequence > after {
-			out = append(out, e)
-		}
-	}
-	return out, nil
+func (t threadTx) WorkEvents(work domain.ID, after uint64, limit int) ([]domain.AcceptedEvent, error) {
+	return logEvents(t.events, after, limit, func(e domain.AcceptedEvent) bool { return onWork(e, work) })
 }
 
 func (t threadTx) Event(id domain.ID) (domain.AcceptedEvent, error) {
