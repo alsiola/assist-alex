@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/open-conduit/open-conduit/domain"
@@ -187,56 +186,6 @@ func (t *hostTx) List(namespace, prefix string) ([]storage.Entry, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out, nil
-}
-
-// Events reads every page the host answers. The host filters each page to
-// the extension's scopes after limiting it, so a short page is not the end:
-// only an empty one is.
-func (t *hostTx) Events(after uint64, limit int) ([]domain.AcceptedEvent, error) {
-	var all []domain.AcceptedEvent
-	for {
-		page, err := t.h.Events(t.ctx, after, 1000)
-		if err != nil {
-			return nil, err
-		}
-		if len(page) == 0 {
-			return all, nil
-		}
-		for _, e := range page {
-			all = append(all, e)
-			if limit > 0 && len(all) == limit {
-				return all, nil
-			}
-		}
-		after = page[len(page)-1].Sequence
-	}
-}
-
-// LatestSequence is the last sequence of the extension's scopes: the
-// watermark assist compares its threads' Events against. It reads on from
-// the thread index's cursor (index.go), so only the few Events the index
-// task hasn't reached yet, rather than the whole log. The cursor is read
-// outside the transaction's checks: the task moves it all the time, and a
-// watermark taken from an older cursor is still the latest sequence.
-func (t *hostTx) LatestSequence() (uint64, error) {
-	var cursor uint64
-	b, _, err := t.h.Get(t.ctx, nsIndex, keyCursor)
-	switch {
-	case err == nil:
-		if cursor, err = strconv.ParseUint(string(b), 10, 64); err != nil {
-			return 0, err
-		}
-	case !errors.Is(err, storage.ErrNotFound):
-		return 0, err
-	}
-	tail, err := t.Events(cursor, 0)
-	if err != nil {
-		return 0, err
-	}
-	if len(tail) == 0 {
-		return cursor, nil
-	}
-	return tail[len(tail)-1].Sequence, nil
 }
 
 // AcceptFunc records an Event of the extension's own families in scope,

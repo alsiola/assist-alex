@@ -88,9 +88,9 @@ func (Route) Samples(_ context.Context, in extension.SampleInput) []extension.Ro
 
 // reachesThread is whether the route takes e to the thread its key names,
 // by Match's rule: a start Alex or the assistant opened it with, Alex's own
-// input, and the generation that applies its changes. The thread index
-// reads an Event's thread from its key by this rule, as the Event may not
-// have been routed yet.
+// input, and the generation that applies its changes. A thread read
+// (thread.go) takes an Event not routed yet to the thread its key names by
+// this rule.
 func reachesThread(e domain.Event) bool {
 	switch e.Type {
 	case TypeStart:

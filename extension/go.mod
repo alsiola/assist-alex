@@ -2,7 +2,7 @@ module github.com/alsiola/assist-alex/extension
 
 go 1.24.2
 
-require github.com/open-conduit/open-conduit v1.14.1-0.20261102162637-37f993d16355
+require github.com/open-conduit/open-conduit v1.14.1-0.20261106172644-dedeb124b6f2
 
 require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect

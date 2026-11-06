@@ -163,7 +163,7 @@ func states(tx storage.Tx, w domain.Work, cs changeSet) (map[string]string, erro
 	if !ok {
 		return out, nil
 	}
-	events, err := threadEventsAfter(tx, w.ID, since)
+	events, err := threadEvents(tx, w.ID, since)
 	if err != nil {
 		return nil, err
 	}

@@ -102,7 +102,7 @@ func TestDaemonThread(t *testing.T) {
 	}
 	d.WaitWork(thread.ID, "completed")
 
-	// The conversation panel reads the thread from the index the task keeps.
+	// The conversation panel reads the thread from its own Events.
 	want := "Get the boiler serviced before winter|Found two engineers; British Gas can do Thursday.|Book British Gas for Thursday 9-12, £89?|Approve|Booked.|Thanks, all done"
 	var got string
 	d.Until("the conversation", 30*time.Second, func() bool {
