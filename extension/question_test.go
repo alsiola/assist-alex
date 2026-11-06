@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/open-conduit/open-conduit/domain"
+	"github.com/open-conduit/open-conduit/extension"
 	"github.com/open-conduit/open-conduit/storage"
 )
 
@@ -17,7 +18,15 @@ type threadTx struct {
 	execs  []domain.Execution
 }
 
-func (t threadTx) Get(_, _ string) ([]byte, error) { return json.Marshal(t.q) }
+func (t threadTx) Get(ns, _ string) ([]byte, error) {
+	if ns == nsIndex {
+		return nil, storage.ErrNotFound
+	}
+	return json.Marshal(t.q)
+}
+
+// List: nothing is indexed yet, so question reads the thread from the tail.
+func (t threadTx) List(_, _ string) ([]storage.Entry, error) { return nil, nil }
 
 func (t threadTx) Events(after uint64, _ int) ([]domain.AcceptedEvent, error) {
 	var out []domain.AcceptedEvent
@@ -52,11 +61,11 @@ func TestQuestionClosedByMessage(t *testing.T) {
 		e.ID = domain.ID("e" + string(rune('0'+seq)))
 		return domain.AcceptedEvent{Event: e, Sequence: seq}
 	}
-	start := ev(1, domain.Event{Type: TypeStart, CorrelationKey: &key, Data: payload(SchemaStart, Start{Text: "Sell it", Role: RoleOperator})})
-	early := ev(2, domain.Event{Type: TypeMessage, CorrelationKey: &key, Data: payload(SchemaMessage, Message{Role: RoleOperator, Text: "oh and"})})
+	start := ev(1, domain.Event{Type: TypeStart, Source: extension.ActionSource, CorrelationKey: &key, Data: payload(SchemaStart, Start{Text: "Sell it", Role: RoleOperator})})
+	early := ev(2, domain.Event{Type: TypeMessage, Source: extension.ActionSource, CorrelationKey: &key, Data: payload(SchemaMessage, Message{Role: RoleOperator, Text: "oh and"})})
 	asked := ev(3, domain.Event{Type: TypeQuestion, WorkID: w.ID, Data: payload(SchemaQuestion, q)})
 	said := ev(4, domain.Event{Type: TypeMessage, WorkID: w.ID, Data: payload(SchemaMessage, Message{Role: RoleAgent, Text: "Asked."})})
-	wrote := ev(5, domain.Event{Type: TypeMessage, CorrelationKey: &key, Data: payload(SchemaMessage, Message{Role: RoleOperator, Text: "These are the two I have"})})
+	wrote := ev(5, domain.Event{Type: TypeMessage, Source: extension.ActionSource, CorrelationKey: &key, Data: payload(SchemaMessage, Message{Role: RoleOperator, Text: "These are the two I have"})})
 	execs := []domain.Execution{{ID: "x1", WorkID: w.ID, Attempt: 1, TriggerID: start.Event.ID}}
 
 	for name, c := range map[string]struct {

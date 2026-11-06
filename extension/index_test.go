@@ -163,3 +163,73 @@ func readCursorFrom(s *memStore) (uint64, error) {
 	})
 	return c, err
 }
+
+// TestThreadEventsAfter: reads that decide something (the open question,
+// each change's state) take a thread's Events after a sequence from the
+// index and from the whole tail past the cursor, however long it is, and
+// leave out other threads' Events.
+func TestThreadEventsAfter(t *testing.T) {
+	key := ThreadKey("assist", "abc")
+	other := ThreadKey("assist", "def")
+	w := domain.Work{ID: WorkID("assist", "abc"), Kind: WorkKind, ScopeID: "assist", CorrelationKeys: []domain.CorrelationKey{key}}
+	s := &memStore{kv: map[string][]byte{}}
+	seq := uint64(0)
+	add := func(e domain.Event) uint64 {
+		seq++
+		e.ID = domain.ID(fmt.Sprint("e", seq))
+		s.log = append(s.log, domain.AcceptedEvent{Event: e, Sequence: seq})
+		return seq
+	}
+	filler := func(n int) {
+		for range n {
+			add(domain.Event{Type: "github.issue.comment", Source: "github"})
+		}
+	}
+	decide := func(k *domain.CorrelationKey, decision string, ids ...string) uint64 {
+		return add(domain.Event{Type: TypeDecision, Source: extension.ActionSource, CorrelationKey: k,
+			Data: payload(SchemaDecision, Decision{Decision: decision, Changes: ids})})
+	}
+	proposed := add(domain.Event{Type: TypeProposal, Source: Type, WorkID: w.ID})
+	decide(&key, StateRejected, "c2") // before c2's Since: doesn't count
+	since2 := seq
+	filler(1200)
+	decide(&key, StateApproved, "c1")
+	// Indexed up to here; the rest is the tail, longer than tailLimit.
+	for more := true; more; {
+		var err error
+		if more, err = IndexOnce(context.Background(), s, time.Now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	filler(tailLimit + 200)
+	decide(&other, StateApproved, "c2") // another thread's
+	decide(&key, StateRejected, "c3")
+
+	var got []domain.AcceptedEvent
+	var st map[string]string
+	cs := changeSet{Changes: []change{{ID: "c1", Since: proposed}, {ID: "c2", Since: since2}, {ID: "c3", Since: proposed}}}
+	if err := s.Transact(context.Background(), storage.Guard{}, func(tx storage.Tx) error {
+		var err error
+		if got, err = threadEventsAfter(tx, w.ID, proposed); err != nil {
+			return err
+		}
+		st, err = states(tx, w, cs)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Errorf("%d Events after the proposal, want 3: %v", len(got), got)
+	}
+	for _, e := range got {
+		if e.Sequence <= proposed {
+			t.Errorf("Event %d is not after %d", e.Sequence, proposed)
+		}
+	}
+	want := map[string]string{"c1": StateApproved, "c2": StateProposed, "c3": StateRejected}
+	for id, s := range want {
+		if st[id] != s {
+			t.Errorf("%s: %q, want %q", id, st[id], s)
+		}
+	}
+}

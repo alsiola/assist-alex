@@ -79,7 +79,7 @@ func question(tx storage.Tx, w domain.Work) (Question, bool, error) {
 		return q, false, err
 	}
 	key, _ := threadKey(w)
-	after, err := tx.Events(q.Sequence, 0)
+	after, err := threadEventsAfter(tx, w.ID, q.Sequence)
 	if err != nil {
 		return q, false, err
 	}

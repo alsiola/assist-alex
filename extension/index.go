@@ -149,9 +149,26 @@ func (x *Extension) index(ctx context.Context, h *sdk.Host) error {
 	}
 }
 
-// threadEvents is a Work's Events: those indexed under it and those after
-// the cursor, up to tailLimit of them, in sequence order.
+// threadEvents is a Work's Events for its panel: those indexed under it and
+// those after the cursor, up to tailLimit of them, in sequence order. While
+// the index first catches up it shows what is indexed so far.
 func threadEvents(tx storage.Tx, work domain.ID) ([]domain.AcceptedEvent, error) {
+	return indexedEvents(tx, work, 0, tailLimit)
+}
+
+// threadEventsAfter is a Work's Events after sequence after, for reads that
+// decide something (whether a question is open, the state of each change):
+// those indexed under it and every one past the cursor, so a read never
+// misses an Event the index task hasn't reached. The task keeps that tail a
+// few Events long, so this reads the thread rather than the log.
+func threadEventsAfter(tx storage.Tx, work domain.ID, after uint64) ([]domain.AcceptedEvent, error) {
+	return indexedEvents(tx, work, after, 0)
+}
+
+// indexedEvents is a Work's Events after sequence after: its index entries,
+// then the log past the cursor (up to limit Events of it, 0 for all), in
+// sequence order.
+func indexedEvents(tx storage.Tx, work domain.ID, after uint64, limit int) ([]domain.AcceptedEvent, error) {
 	cursor, err := readCursor(tx)
 	if err != nil {
 		return nil, err
@@ -168,10 +185,13 @@ func threadEvents(tx storage.Tx, work domain.ID) ([]domain.AcceptedEvent, error)
 			continue
 		}
 		e := a.Domain()
+		if e.Sequence <= after {
+			continue
+		}
 		seen[e.Sequence] = true
 		out = append(out, e)
 	}
-	tail, err := tx.Events(cursor, tailLimit)
+	tail, err := tx.Events(max(cursor, after), limit)
 	if err != nil {
 		return nil, err
 	}
